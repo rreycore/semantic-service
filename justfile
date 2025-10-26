@@ -6,6 +6,7 @@ tidy:
 generate:
     cd backend && go generate ./...
 
+
 sqlc-generate:
     cd backend && go tool sqlc generate -f db/sqlc/sqlc.yaml
 
