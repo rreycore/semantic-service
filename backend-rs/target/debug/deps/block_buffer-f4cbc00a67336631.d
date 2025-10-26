@@ -1,0 +1,8 @@
+/Users/rey/Documents/FullStack лабы/1/backend-rs/target/debug/deps/block_buffer-f4cbc00a67336631.d: /Users/rey/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/block-buffer-0.10.4/src/lib.rs /Users/rey/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/block-buffer-0.10.4/src/sealed.rs
+
+/Users/rey/Documents/FullStack лабы/1/backend-rs/target/debug/deps/libblock_buffer-f4cbc00a67336631.rlib: /Users/rey/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/block-buffer-0.10.4/src/lib.rs /Users/rey/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/block-buffer-0.10.4/src/sealed.rs
+
+/Users/rey/Documents/FullStack лабы/1/backend-rs/target/debug/deps/libblock_buffer-f4cbc00a67336631.rmeta: /Users/rey/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/block-buffer-0.10.4/src/lib.rs /Users/rey/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/block-buffer-0.10.4/src/sealed.rs
+
+/Users/rey/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/block-buffer-0.10.4/src/lib.rs:
+/Users/rey/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/block-buffer-0.10.4/src/sealed.rs:
