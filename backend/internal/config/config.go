@@ -67,22 +67,6 @@ func Init(configPath string) (*Config, error) {
 
 	v.AutomaticEnv()
 
-	// // --- ОТЛАДОЧНЫЙ БЛОК ---
-	// // Получаем все настройки после слияния всех источников
-	// allSettings := v.AllSettings()
-
-	// // Преобразуем в красивый JSON для вывода
-	// settingsJson, err := json.MarshalIndent(allSettings, "", "  ")
-	// if err != nil {
-	// 	log.Fatalf("Ошибка при преобразовании настроек в JSON: %v", err)
-	// }
-
-	// // Выводим в консоль
-	// fmt.Println("--- Загруженная конфигурация Viper ---")
-	// fmt.Println(string(settingsJson))
-	// fmt.Println("------------------------------------")
-	// // --- КОНЕЦ ОТЛАДОЧНОГО БЛОКА ---
-
 	level, err := zerolog.ParseLevel(v.GetString("log_level"))
 	if err != nil {
 		return nil, fmt.Errorf("не удалось распознать log_level: %w", err)
