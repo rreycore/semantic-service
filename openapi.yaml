@@ -1,0 +1,396 @@
+openapi: 3.0.4
+info:
+  title: Document RAG API
+  description: API для регистрации пользователей, загрузки документов и семантического поиска по ним.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8000
+    description: Локальный сервер для разработки
+
+paths:
+  /ping:
+    get:
+      operationId: Ping
+      summary: Проверка работоспособности сервера
+      tags:
+        - Health
+      responses:
+        "200":
+          description: Сервер работает
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: pong
+
+  /auth/register:
+    post:
+      operationId: Register
+      summary: Регистрация нового пользователя
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Пользователь успешно создан и аутентифицирован. Возвращает access_token в теле и устанавливает refresh_token в http-only cookie.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+                example: refresh_token=...; Path=/; Max-Age=...; HttpOnly; SameSite=Lax
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "400":
+          description: Невалидное тело запроса
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Пользователь с таким email уже существует
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /auth/login:
+    post:
+      operationId: Login
+      summary: Вход в систему
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Успешный вход. Возвращает access_token в теле и устанавливает refresh_token в http-only cookie.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+                example: refresh_token=...; Path=/; Max-Age=...; HttpOnly; SameSite=Lax
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "400":
+          description: Невалидное тело запроса
+        "401":
+          description: Неверный email или пароль
+
+  /auth/refresh:
+    post:
+      operationId: Refresh
+      summary: Обновление пары токенов
+      description: Считывает refresh_token из http-only cookie и возвращает новую пару токенов.
+      tags:
+        - Auth
+      responses:
+        "200":
+          description: Успешное обновление. Возвращает новый access_token и обновляет refresh_token в cookie.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+                example: refresh_token=...; Path=/; Max-Age=...; HttpOnly; SameSite=Lax
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          description: Refresh токен в cookie не найден, невалиден или истек
+
+  /auth/logout:
+    post:
+      operationId: Logout
+      summary: Выход из текущей сессии
+      description: Отзывает refresh_token, полученный из cookie, и удаляет cookie из браузера.
+      tags:
+        - Auth
+      security:
+        - BearerAuth: []
+      responses:
+        "204":
+          description: Успешный выход. Cookie удалена.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+                example: refresh_token=; Path=/; Max-Age=0; HttpOnly
+        "401":
+          description: Необходима авторизация
+
+  /auth/full_logout:
+    post:
+      operationId: FullLogout
+      summary: Выход со всех устройств
+      tags:
+        - Auth
+      security:
+        - BearerAuth: []
+      responses:
+        "204":
+          description: Успешный выход со всех устройств
+        "401":
+          description: Необходима авторизация
+
+  /users/me:
+    get:
+      operationId: GetUserProfile
+      summary: Получить профиль текущего пользователя
+      tags:
+        - Users
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Профиль пользователя
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Необходима авторизация
+
+  /documents:
+    get:
+      operationId: ListUserDocuments
+      summary: Получить список всех документов пользователя
+      tags:
+        - Documents
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Список документов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Document"
+        "401":
+          description: Необходима авторизация
+    post:
+      operationId: UploadDocument
+      summary: Загрузить новый документ
+      tags:
+        - Documents
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: Документ успешно загружен и обработан
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+        "400":
+          description: Невалидный файл
+        "401":
+          description: Необходима авторизация
+
+  /documents/{documentID}:
+    get:
+      operationId: GetDocumentByID
+      summary: Получить информацию о конкретном документе
+      tags:
+        - Documents
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: documentID
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: Информация о документе
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+        "401":
+          description: Необходима авторизация
+        "404":
+          description: Документ не найден или нет доступа
+    delete:
+      operationId: DeleteDocument
+      summary: Удалить документ
+      tags:
+        - Documents
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: documentID
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "204":
+          description: Документ успешно удален
+        "401":
+          description: Необходима авторизация
+        "404":
+          description: Документ не найден или нет доступа
+
+  /documents/{documentID}/search:
+    post:
+      operationId: SearchInDocument
+      summary: Семантический поиск по конкретному документу
+      tags:
+        - Documents
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: documentID
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SearchRequest"
+      responses:
+        "200":
+          description: Результаты поиска
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SearchResult"
+        "400":
+          description: Невалидное тело запроса
+        "401":
+          description: Необходима авторизация
+        "404":
+          description: Документ не найден или нет доступа
+
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        email:
+          type: string
+          format: email
+          example: user@example.com
+    Document:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 101
+        userID:
+          type: integer
+          format: int64
+          example: 1
+        filename:
+          type: string
+          example: "my_notes.txt"
+    SearchResult:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1001
+        documentID:
+          type: integer
+          format: int64
+          example: 101
+        text:
+          type: string
+          example: "This is a relevant chunk of text..."
+        distance:
+          type: number
+          format: double
+          example: 0.12345
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+    LoginResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+    SearchRequest:
+      type: object
+      required:
+        - query
+      properties:
+        query:
+          type: string
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

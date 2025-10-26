@@ -1,0 +1,28 @@
+services:
+  timescaledb:
+    image: timescale/timescaledb-ha:pg17
+    pull_policy: always
+    env_file:
+      - .env
+      - .env.override
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data
+    ports:
+      - 127.0.0.1:5433:5432
+    restart: unless-stopped
+    healthcheck:
+      test: pg_isready -d db -U postgres
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  vectorizer-worker:
+    image: timescale/pgai-vectorizer-worker
+    environment:
+      PGAI_VECTORIZER_WORKER_DB_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb:5432/${POSTGRES_DB}?sslmode=disable
+      OPENAI_BASE_URL: ${EMBEDDING_SERVICE_URL}
+      OPENAI_API_KEY: api_key
+    command: --poll-interval 20s
+
+volumes:
+  timescaledb_data:
