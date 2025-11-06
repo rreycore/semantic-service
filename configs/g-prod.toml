@@ -1,0 +1,7 @@
+[backend]
+host = "backend"
+port = 8000
+
+[embedding-service]
+host = "embedding-service"
+port = 8000

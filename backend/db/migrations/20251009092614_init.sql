@@ -39,8 +39,11 @@ create index if not exists chunks_embedding_idx on chunks using diskann (embeddi
 -- +goose Down
 -- +goose StatementBegin
 drop table if exists chunks;
+
 drop table if exists documents;
+
 drop table if exists refresh_tokens;
+
 drop table if exists users;
 
 drop extension if exists vectorscale cascade;

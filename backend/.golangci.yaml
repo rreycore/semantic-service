@@ -1,0 +1,12 @@
+version: 2
+
+run:
+  allow-parallel-runners: true
+
+linters:
+  default: standard
+  disable:
+    - depguard
+    - wsl
+  settings:
+    # revive:

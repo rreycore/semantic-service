@@ -8,6 +8,7 @@ import (
 )
 
 func (h *handler) GetUserProfile(ctx context.Context, request GetUserProfileRequestObject) (GetUserProfileResponseObject, error) {
+
 	_, claims, _ := jwtauth.FromContext(ctx)
 	userID := int64(claims["user_id"].(float64))
 

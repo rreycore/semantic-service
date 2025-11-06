@@ -46,6 +46,7 @@ func (h *handler) Init() http.Handler {
 
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RequestID)
+	r.Use(contextInjector)
 
 	jwtMiddleware := []func(http.Handler) http.Handler{
 		jwtauth.Verifier(h.tokenAuth),

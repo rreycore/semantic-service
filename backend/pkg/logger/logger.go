@@ -11,7 +11,6 @@ func New(level zerolog.Level) zerolog.Logger {
 	zerolog.TimeFieldFormat = time.DateTime
 
 	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
-
 	logger = logger.Level(level)
 
 	return logger

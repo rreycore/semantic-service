@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -26,7 +25,7 @@ type (
 		Password string
 		DB       string
 		Port     int
-		SSLMode  bool
+		SSLMode  string
 	}
 
 	ServerConfig struct {
@@ -45,23 +44,32 @@ type (
 	}
 
 	EmbeddingConfig struct {
-		Url string
+		Host string
+		Port int
 	}
 )
 
-func Init(configPath string) (*Config, error) {
+func Init(cfgPath, globalCfgPath, envPath string) (*Config, error) {
 	v := viper.New()
 
-	v.AddConfigPath(filepath.Dir(configPath))
-	v.SetConfigName(filepath.Base(configPath))
+	v.AddConfigPath(filepath.Dir(globalCfgPath))
+	v.SetConfigName(filepath.Base(globalCfgPath))
 	if err := v.ReadInConfig(); err != nil {
-		return nil, fmt.Errorf("ошибка чтения базового конфига '%s': %w", configPath, err)
+		return nil, fmt.Errorf("ошибка чтения глобального конфига '%s': %w", globalCfgPath, err)
 	}
 
-	v.SetConfigFile(".env")
-	if err := v.MergeInConfig(); err != nil {
-		if _, ok := err.(*os.PathError); !ok {
-			return nil, fmt.Errorf("ошибка парсинга .env файла: %w", err)
+	v.AddConfigPath(filepath.Dir(cfgPath))
+	v.SetConfigName(filepath.Base(cfgPath))
+	if err := v.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+			return nil, fmt.Errorf("ошибка чтения локального конфига '%s': %w", cfgPath, err)
+		}
+	}
+
+	v.SetConfigFile(envPath)
+	if err := v.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+			return nil, fmt.Errorf("failed to read .env file: %w", err)
 		}
 	}
 
@@ -69,13 +77,13 @@ func Init(configPath string) (*Config, error) {
 
 	level, err := zerolog.ParseLevel(v.GetString("log_level"))
 	if err != nil {
-		return nil, fmt.Errorf("не удалось распознать log_level: %w", err)
+		return nil, fmt.Errorf("не удалось распознать log_level: '%s': %w", v.GetString("log_level"), err)
 	}
 
 	return &Config{
 		LogLevel: level,
 		Server: &ServerConfig{
-			Port:           v.GetInt("server.port"),
+			Port:           v.GetInt("backend.port"),
 			ReadTimeout:    v.GetDuration("server.readTimeout"),
 			WriteTimeout:   v.GetDuration("server.writeTimeout"),
 			MaxHeaderBytes: v.GetInt("server.maxHeaderBytes"),
@@ -86,7 +94,7 @@ func Init(configPath string) (*Config, error) {
 			Password: v.GetString("POSTGRES_PASSWORD"),
 			DB:       v.GetString("POSTGRES_DB"),
 			Port:     v.GetInt("POSTGRES_PORT"),
-			SSLMode:  v.GetBool("POSTGRES_SSLMODE"),
+			SSLMode:  v.GetString("POSTGRES_SSLMODE"),
 		},
 		Handler: &HandlerConfig{
 			RequestTimeout: v.GetDuration("handler.requestTimeout"),
@@ -94,15 +102,19 @@ func Init(configPath string) (*Config, error) {
 		JWT: &JWTConfig{
 			Secret: v.GetString("JWT_SECRET"),
 		},
-		Embedding: &EmbeddingConfig{Url: v.GetString("embedding.url")},
+		Embedding: &EmbeddingConfig{
+			Host: v.GetString("embedding-service.host"),
+			Port: v.GetInt("embedding-service.port"),
+		},
 	}, nil
 }
 
 func (p *PostgresConfig) GetUrl() string {
-	sslMode := "disable"
-	if p.SSLMode {
-		sslMode = "require"
-	}
 	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-		p.Host, p.Port, p.User, p.Password, p.DB, sslMode)
+		p.Host, p.Port, p.User, p.Password, p.DB, p.SSLMode)
+}
+
+func (e *EmbeddingConfig) GetUrl() string {
+	return fmt.Sprintf("http://%s:%d",
+		e.Host, e.Port)
 }

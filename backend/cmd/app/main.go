@@ -25,15 +25,21 @@ import (
 
 func main() {
 	var cfgPath string
+	var globalCfgPath string
+	var envPath string
+
 	flag.StringVar(&cfgPath, "cfg", "configs/local", "config path")
+	flag.StringVar(&globalCfgPath, "globCfg", "../configs/g-local", "global config path")
+	flag.StringVar(&envPath, "env", ".env", "path to .env file")
+
 	flag.Parse()
 
-	cfg, err := config.Init(cfgPath)
+	cfg, err := config.Init(cfgPath, globalCfgPath, envPath)
 	if err != nil {
 		log.Fatalf("failed to init config: %v", err)
 	}
 
-	log := logger.NewConsole(cfg.LogLevel)
+	log := logger.New(cfg.LogLevel)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -41,6 +47,7 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to connect to gpxpool")
 	}
+
 	if err := pool.Ping(ctx); err != nil {
 		log.Fatal().Err(err).Msg("failed to ping pg")
 	}
@@ -49,7 +56,7 @@ func main() {
 
 	repo := repository.NewPostgres(pool, &log)
 
-	embeddingClient := embedding_client.NewClient(cfg.Embedding.Url)
+	embeddingClient := embedding_client.NewClient(cfg.Embedding.GetUrl())
 
 	service := service.New(
 		repo,

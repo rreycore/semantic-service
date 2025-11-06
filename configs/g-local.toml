@@ -1,0 +1,7 @@
+[backend]
+host = "localhost"
+port = 8000
+
+[embedding-service]
+host = "localhost"
+port = 8001

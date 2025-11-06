@@ -27,7 +27,7 @@ type postgres struct {
 }
 
 func NewPostgres(pool *pgxpool.Pool, log *zerolog.Logger) Repository {
-	return &postgres{pool: pool, log: log}
+	return &postgres{pool: pool, q: queries.New(pool), log: log}
 }
 
 func (p *postgres) WithTransaction(ctx context.Context, fn func(repo Repository) error) error {

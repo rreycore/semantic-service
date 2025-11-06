@@ -1,14 +1,9 @@
-log_level = "info"
+log_level = "debug"
 
 [server]
-port = 8000
 readTimeout = "10s"
 writeTimeout = "10s"
 maxHeaderBytes = 1024
 
 [handler]
 requestTimeout = "10s"
-swaggerHost = "*"
-
-[embedding]
-url = "http://localhost:8002"
