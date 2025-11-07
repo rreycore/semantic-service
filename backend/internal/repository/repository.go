@@ -55,7 +55,7 @@ func (p *postgres) withTx(tx pgx.Tx) *postgres {
 func (p *postgres) rollbackTx(tx pgx.Tx) {
 	err := tx.Rollback(context.Background())
 	if err != nil && !errors.Is(err, pgx.ErrTxClosed) {
-		p.log.Error().Err(err).Msg("RollbackTx")
+		p.log.Err(err).Msg("RollbackTx")
 	}
 }
 

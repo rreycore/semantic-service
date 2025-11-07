@@ -1,10 +1,16 @@
-set dotenv-path := "./backend/.env"
+set dotenv-load
+
+default: timescaledb db-setup up-all
+
 
 backend:
     cd backend && go run cmd/app/main.go
 
 tidy:
     go mod tidy
+
+up-all:
+    docker compose up --build -d
 
 generate:
     cd backend && go generate ./...
@@ -19,10 +25,15 @@ show-api-docs:
     docker run --rm -p 8080:8080 -v "{{justfile_directory()}}/openapi.yaml":/usr/share/nginx/html/openapi.yaml -e URL=openapi.yaml swaggerapi/swagger-ui
 
 migrate-up:
-    cd backend && go tool goose -dir db/migrations postgres "host=$POSTGRES_HOST port=$POSTGRES_PORT user=$POSTGRES_USER password=$POSTGRES_PASSWORD dbname=$POSTGRES_DB sslmode=disable" up
+    docker compose run --rm --build db-migration
 
 migrate-down:
-    cd backend && go tool goose -dir db/migrations postgres "host=$POSTGRES_HOST port=$POSTGRES_PORT user=$POSTGRES_USER password=$POSTGRES_PASSWORD dbname=$POSTGRES_DB sslmode=disable" down
+    docker compose run --rm --build db-migration down
+
+pgai-setup:
+    docker compose run --rm --build pgai-setup
+
+db-setup: pgai-setup migrate-up
 
 setup-vectorizer:
     docker compose run --rm --entrypoint "python -m pgai install -d postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@$POSTGRES_HOST:$POSTGRES_PORT/$POSTGRES_DB" vectorizer-worker

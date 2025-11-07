@@ -98,11 +98,11 @@ func (h *handler) Init() http.Handler {
 }
 
 func (h *handler) requestErrorHandler(w http.ResponseWriter, r *http.Request, err error) {
-	h.log.Error().Err(err).Msg("Request error")
+	h.log.Err(err).Msg("Request error")
 	http.Error(w, err.Error(), http.StatusBadRequest)
 }
 
 func (h *handler) responseErrorHandler(w http.ResponseWriter, r *http.Request, err error) {
-	h.log.Error().Err(err).Str("uri", r.RequestURI).Msg("Internal server error")
+	h.log.Err(err).Str("uri", r.RequestURI).Msg("Internal server error")
 	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 }

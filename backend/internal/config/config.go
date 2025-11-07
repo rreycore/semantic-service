@@ -13,13 +13,13 @@ type (
 	Config struct {
 		LogLevel  zerolog.Level
 		Server    *ServerConfig
-		Postgres  *PostgresConfig
+		Db        *Db
 		Handler   *HandlerConfig
 		JWT       *JWTConfig
 		Embedding *EmbeddingConfig
 	}
 
-	PostgresConfig struct {
+	Db struct {
 		Host     string
 		User     string
 		Password string
@@ -55,19 +55,19 @@ func Init(cfgPath, globalCfgPath, envPath string) (*Config, error) {
 	v.AddConfigPath(filepath.Dir(globalCfgPath))
 	v.SetConfigName(filepath.Base(globalCfgPath))
 	if err := v.ReadInConfig(); err != nil {
-		return nil, fmt.Errorf("ошибка чтения глобального конфига '%s': %w", globalCfgPath, err)
+		return nil, fmt.Errorf("err on read global config '%s': %w", globalCfgPath, err)
 	}
 
 	v.AddConfigPath(filepath.Dir(cfgPath))
 	v.SetConfigName(filepath.Base(cfgPath))
-	if err := v.ReadInConfig(); err != nil {
+	if err := v.MergeInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
-			return nil, fmt.Errorf("ошибка чтения локального конфига '%s': %w", cfgPath, err)
+			return nil, fmt.Errorf("err on read local config '%s': %w", cfgPath, err)
 		}
 	}
 
 	v.SetConfigFile(envPath)
-	if err := v.ReadInConfig(); err != nil {
+	if err := v.MergeInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
 			return nil, fmt.Errorf("failed to read .env file: %w", err)
 		}
@@ -77,18 +77,12 @@ func Init(cfgPath, globalCfgPath, envPath string) (*Config, error) {
 
 	level, err := zerolog.ParseLevel(v.GetString("log_level"))
 	if err != nil {
-		return nil, fmt.Errorf("не удалось распознать log_level: '%s': %w", v.GetString("log_level"), err)
+		return nil, fmt.Errorf("invalid or empty log_level: '%s': %w", v.GetString("log_level"), err)
 	}
 
 	return &Config{
 		LogLevel: level,
-		Server: &ServerConfig{
-			Port:           v.GetInt("backend.port"),
-			ReadTimeout:    v.GetDuration("server.readTimeout"),
-			WriteTimeout:   v.GetDuration("server.writeTimeout"),
-			MaxHeaderBytes: v.GetInt("server.maxHeaderBytes"),
-		},
-		Postgres: &PostgresConfig{
+		Db: &Db{
 			Host:     v.GetString("POSTGRES_HOST"),
 			User:     v.GetString("POSTGRES_USER"),
 			Password: v.GetString("POSTGRES_PASSWORD"),
@@ -96,11 +90,17 @@ func Init(cfgPath, globalCfgPath, envPath string) (*Config, error) {
 			Port:     v.GetInt("POSTGRES_PORT"),
 			SSLMode:  v.GetString("POSTGRES_SSLMODE"),
 		},
-		Handler: &HandlerConfig{
-			RequestTimeout: v.GetDuration("handler.requestTimeout"),
-		},
 		JWT: &JWTConfig{
 			Secret: v.GetString("JWT_SECRET"),
+		},
+		Server: &ServerConfig{
+			Port:           v.GetInt("backend.port"),
+			ReadTimeout:    v.GetDuration("server.readTimeout"),
+			WriteTimeout:   v.GetDuration("server.writeTimeout"),
+			MaxHeaderBytes: v.GetInt("server.maxHeaderBytes"),
+		},
+		Handler: &HandlerConfig{
+			RequestTimeout: v.GetDuration("handler.requestTimeout"),
 		},
 		Embedding: &EmbeddingConfig{
 			Host: v.GetString("embedding-service.host"),
@@ -109,7 +109,7 @@ func Init(cfgPath, globalCfgPath, envPath string) (*Config, error) {
 	}, nil
 }
 
-func (p *PostgresConfig) GetUrl() string {
+func (p *Db) GetUrl() string {
 	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 		p.Host, p.Port, p.User, p.Password, p.DB, p.SSLMode)
 }

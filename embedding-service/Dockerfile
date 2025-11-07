@@ -15,4 +15,4 @@ COPY . .
 
 RUN uv sync --all-packages
 
-ENTRYPOINT uv run -m src.main
+ENTRYPOINT ["uv", "run", "fastapi", "run", "src/main.py", "--host", "0.0.0.0", "--port", "8000"]

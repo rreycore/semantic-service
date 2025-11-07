@@ -66,7 +66,7 @@ func (s *service) SearchInDocument(ctx context.Context, userID, documentID int64
 	embReq := embedding_client.EmbeddingRequest{Input: query}
 	embResp, err := s.embeddingClient.CreateEmbeddings(ctx, embReq)
 	if err != nil {
-		s.log.Error().Err(err).Msg("failed to get embedding for query")
+		s.log.Err(err).Msg("failed to get embedding for query")
 		return nil, err
 	}
 	if len(embResp.Data) == 0 {

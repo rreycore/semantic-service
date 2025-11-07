@@ -1,7 +1,5 @@
 -- +goose Up
 -- +goose StatementBegin
-create extension if not exists vectorscale cascade;
-
 create table users (
     id bigserial primary key,
     email varchar(255) unique not null,
@@ -45,7 +43,5 @@ drop table if exists documents;
 drop table if exists refresh_tokens;
 
 drop table if exists users;
-
-drop extension if exists vectorscale cascade;
 
 -- +goose StatementEnd

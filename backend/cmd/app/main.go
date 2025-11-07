@@ -30,7 +30,7 @@ func main() {
 
 	flag.StringVar(&cfgPath, "cfg", "configs/local", "config path")
 	flag.StringVar(&globalCfgPath, "globCfg", "../configs/g-local", "global config path")
-	flag.StringVar(&envPath, "env", ".env", "path to .env file")
+	flag.StringVar(&envPath, "env", "../.env", "path to .env file")
 
 	flag.Parse()
 
@@ -43,7 +43,7 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	pool, err := pgxpool.New(ctx, cfg.Postgres.GetUrl())
+	pool, err := pgxpool.New(ctx, cfg.Db.GetUrl())
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to connect to gpxpool")
 	}

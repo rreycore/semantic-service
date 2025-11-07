@@ -8,6 +8,11 @@ RUN rm -rf /var/lib/apt/lists/*
 
 RUN curl -fsSL https://raw.githubusercontent.com/pressly/goose/master/install.sh | sh
 
-COPY db/migrations ./migrations
+COPY db/migrations .
+COPY migrate.sh .
 
-ENTRYPOINT goose postgres "host=$POSTGRES_HOST port=$POSTGRES_PORT user=$POSTGRES_USER password=$POSTGRES_PASSWORD dbname=$POSTGRES_DBNAME sslmode=$POSTGRES_SSLMODE" up
+RUN chmod +x migrate.sh
+
+ENTRYPOINT ["./migrate.sh"]
+
+CMD ["up"]

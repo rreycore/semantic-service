@@ -1,10 +1,9 @@
 -- +goose Up
 -- +goose StatementBegin
-create extension if not exists ai cascade;
 
 select ai.create_vectorizer(
      'chunks'::regclass,
-     name => 'chunks_vectorizer',
+     name => 'document_chunks_vectorizer',
      loading => ai.loading_column('text'),
      embedding => ai.embedding_openai('text-embedding-3-small', 768),
      chunking => ai.chunking_none(),
@@ -17,6 +16,5 @@ select ai.create_vectorizer(
 
 -- +goose Down
 -- +goose StatementBegin
-select ai.drop_vectorizer('chunks_vectorizer');
-drop extension if exists ai cascade;
+select ai.drop_vectorizer('document_chunks_vectorizer');
 -- +goose StatementEnd
