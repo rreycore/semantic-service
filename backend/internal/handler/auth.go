@@ -11,7 +11,50 @@ import (
 	"github.com/go-chi/jwtauth/v5"
 )
 
-var expires time.Duration = 7 * 24 * time.Hour
+var refreshTokenExpires time.Duration = 7 * 24 * time.Hour
+var accessTokenExpires time.Duration = 15 * time.Minute
+
+func setTokensCookie(w http.ResponseWriter, accessToken, refreshToken string) {
+	accessCookie := http.Cookie{
+		Name:     "jwt",
+		Value:    accessToken,
+		Path:     "/",
+		Expires:  time.Now().Add(accessTokenExpires),
+		HttpOnly: true,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+	}
+	refreshCookie := http.Cookie{
+		Name:     "refresh_token",
+		Value:    refreshToken,
+		Path:     "/",
+		Expires:  time.Now().Add(refreshTokenExpires),
+		HttpOnly: true,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+	}
+	http.SetCookie(w, &accessCookie)
+	http.SetCookie(w, &refreshCookie)
+}
+
+func clearTokensCookie(w http.ResponseWriter) {
+	accessCookie := http.Cookie{
+		Name:     "jwt",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		MaxAge:   -1,
+	}
+	refreshCookie := http.Cookie{
+		Name:     "refresh_token",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		MaxAge:   -1,
+	}
+	http.SetCookie(w, &accessCookie)
+	http.SetCookie(w, &refreshCookie)
+}
 
 func (h *handler) Register(ctx context.Context, request RegisterRequestObject) (RegisterResponseObject, error) {
 	_, accessToken, refreshToken, err := h.service.Register(ctx, string(request.Body.Email), request.Body.Password)
@@ -23,24 +66,15 @@ func (h *handler) Register(ctx context.Context, request RegisterRequestObject) (
 		return nil, err
 	}
 
-	cookie := http.Cookie{
-		Name:     "refresh_token",
-		Value:    refreshToken,
-		Path:     "/",
-		Expires:  time.Now().Add(expires),
-		HttpOnly: true,
-		Secure:   false,
-		SameSite: http.SameSiteLaxMode,
+	w, ok := ctx.Value(responseWriterKey).(http.ResponseWriter)
+	if !ok {
+		return nil, fmt.Errorf("response writer not found in context")
 	}
 
-	return Register201JSONResponse{
-		Body: LoginResponse{
-			AccessToken: &accessToken,
-		},
-		Headers: Register201ResponseHeaders{
-			SetCookie: cookie.String(),
-		},
-	}, nil
+	setTokensCookie(w, accessToken, refreshToken)
+	w.WriteHeader(http.StatusCreated)
+
+	return nil, nil
 }
 
 func (h *handler) Login(ctx context.Context, request LoginRequestObject) (LoginResponseObject, error) {
@@ -52,24 +86,15 @@ func (h *handler) Login(ctx context.Context, request LoginRequestObject) (LoginR
 		return nil, err
 	}
 
-	cookie := http.Cookie{
-		Name:     "refresh_token",
-		Value:    refreshToken,
-		Path:     "/",
-		Expires:  time.Now().Add(expires),
-		HttpOnly: true,
-		Secure:   false,
-		SameSite: http.SameSiteLaxMode,
+	w, ok := ctx.Value(responseWriterKey).(http.ResponseWriter)
+	if !ok {
+		return nil, fmt.Errorf("response writer not found in context")
 	}
 
-	return Login200JSONResponse{
-		Body: LoginResponse{
-			AccessToken: &accessToken,
-		},
-		Headers: Login200ResponseHeaders{
-			SetCookie: cookie.String(),
-		},
-	}, nil
+	setTokensCookie(w, accessToken, refreshToken)
+	w.WriteHeader(http.StatusOK)
+
+	return nil, nil
 }
 
 func (h *handler) Refresh(ctx context.Context, request RefreshRequestObject) (RefreshResponseObject, error) {
@@ -87,40 +112,16 @@ func (h *handler) Refresh(ctx context.Context, request RefreshRequestObject) (Re
 		return Refresh401Response{}, nil
 	}
 
-	accessToken, newRefreshToken, err := h.service.Refresh(ctx, cookie.Value)
+	newAccessToken, newRefreshToken, err := h.service.Refresh(ctx, cookie.Value)
 	if err != nil {
-		if errors.Is(err, service.ErrRefreshTokenNotFound) {
-			http.SetCookie(w, &http.Cookie{
-				Name:     "refresh_token",
-				Value:    "",
-				Path:     "/",
-				HttpOnly: true,
-				MaxAge:   -1,
-			})
-
-			return Refresh401Response{}, nil
-		}
-		return nil, err
+		clearTokensCookie(w)
+		return Refresh401Response{}, nil
 	}
 
-	newCookie := http.Cookie{
-		Name:     "refresh_token",
-		Value:    newRefreshToken,
-		Path:     "/",
-		Expires:  time.Now().Add(expires),
-		HttpOnly: true,
-		Secure:   false,
-		SameSite: http.SameSiteLaxMode,
-	}
+	setTokensCookie(w, newAccessToken, newRefreshToken)
+	w.WriteHeader(http.StatusOK)
 
-	return Refresh200JSONResponse{
-		Body: LoginResponse{
-			AccessToken: &accessToken,
-		},
-		Headers: Refresh200ResponseHeaders{
-			SetCookie: newCookie.String(),
-		},
-	}, nil
+	return nil, nil
 }
 
 func (h *handler) Logout(ctx context.Context, request LogoutRequestObject) (LogoutResponseObject, error) {
@@ -129,15 +130,10 @@ func (h *handler) Logout(ctx context.Context, request LogoutRequestObject) (Logo
 		return nil, fmt.Errorf("response writer not found in context")
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     "refresh_token",
-		Value:    "",
-		Path:     "/",
-		HttpOnly: true,
-		MaxAge:   -1,
-	})
+	clearTokensCookie(w)
+	w.WriteHeader(http.StatusNoContent)
 
-	return Logout204Response{}, nil
+	return nil, nil
 }
 
 func (h *handler) FullLogout(ctx context.Context, request FullLogoutRequestObject) (FullLogoutResponseObject, error) {
@@ -153,13 +149,8 @@ func (h *handler) FullLogout(ctx context.Context, request FullLogoutRequestObjec
 		return nil, err
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     "refresh_token",
-		Value:    "",
-		Path:     "/",
-		HttpOnly: true,
-		MaxAge:   -1,
-	})
+	clearTokensCookie(w)
+	w.WriteHeader(http.StatusNoContent)
 
-	return FullLogout204Response{}, nil
+	return nil, nil
 }

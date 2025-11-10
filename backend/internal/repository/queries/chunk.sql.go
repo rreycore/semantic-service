@@ -12,34 +12,48 @@ import (
 )
 
 const createChunk = `-- name: CreateChunk :one
-INSERT INTO chunks (user_id, document_id, text)
-VALUES ($1, $2, $3)
-RETURNING id, user_id, document_id, text, embedding
+INSERT INTO chunks (user_id, document_id, title, text)
+VALUES ($1, $2, $3, $4)
+RETURNING id, user_id, document_id, title, text
 `
 
 type CreateChunkParams struct {
 	UserID     int64
 	DocumentID int64
+	Title      string
+	Text       string
+}
+
+type CreateChunkRow struct {
+	ID         int64
+	UserID     int64
+	DocumentID int64
+	Title      string
 	Text       string
 }
 
 // Создает один чанк для документа.
 // Поле 'embedding' здесь не передается, оно будет NULL при первичной вставке.
-func (q *Queries) CreateChunk(ctx context.Context, arg CreateChunkParams) (Chunk, error) {
-	row := q.db.QueryRow(ctx, createChunk, arg.UserID, arg.DocumentID, arg.Text)
-	var i Chunk
+func (q *Queries) CreateChunk(ctx context.Context, arg CreateChunkParams) (CreateChunkRow, error) {
+	row := q.db.QueryRow(ctx, createChunk,
+		arg.UserID,
+		arg.DocumentID,
+		arg.Title,
+		arg.Text,
+	)
+	var i CreateChunkRow
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
 		&i.DocumentID,
+		&i.Title,
 		&i.Text,
-		&i.Embedding,
 	)
 	return i, err
 }
 
 const getChunksByDocumentID = `-- name: GetChunksByDocumentID :many
-SELECT id, user_id, document_id, text, embedding
+SELECT id, user_id, document_id, title, text, embedding
 FROM chunks
 WHERE document_id = $1 AND user_id = $2
 ORDER BY id
@@ -65,6 +79,7 @@ func (q *Queries) GetChunksByDocumentID(ctx context.Context, arg GetChunksByDocu
 			&i.ID,
 			&i.UserID,
 			&i.DocumentID,
+			&i.Title,
 			&i.Text,
 			&i.Embedding,
 		); err != nil {

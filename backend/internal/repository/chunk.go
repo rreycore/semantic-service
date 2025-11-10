@@ -10,10 +10,10 @@ import (
 )
 
 type ChunkRepository interface {
-	CreateChunk(ctx context.Context, userID, documentID int64, chunkText string) (*domain.Chunk, error)
+	CreateChunk(ctx context.Context, userID, documentID int64, title, chunkText string) (*domain.Chunk, error)
 	GetChunksByDocumentID(ctx context.Context, documentID, userID int64) ([]domain.Chunk, error)
-	SearchUserChunks(ctx context.Context, userID int64, embedding pgvector.Vector, limit int32) ([]domain.SearchResult, error)
-	SearchChunksInDocument(ctx context.Context, userID, documentID int64, embedding pgvector.Vector, limit int32) ([]domain.SearchResult, error)
+	SearchUserChunks(ctx context.Context, userID int64, embedding []float32, limit int32) ([]domain.SearchResult, error)
+	SearchChunksInDocument(ctx context.Context, userID, documentID int64, embedding []float32, limit int32) ([]domain.SearchResult, error)
 }
 
 func chunkToDomain(c queries.Chunk) *domain.Chunk {
@@ -25,16 +25,26 @@ func chunkToDomain(c queries.Chunk) *domain.Chunk {
 	}
 }
 
-func (p *postgres) CreateChunk(ctx context.Context, userID, documentID int64, text string) (*domain.Chunk, error) {
+func chunkRowToDomain(c queries.CreateChunkRow) *domain.Chunk {
+	return &domain.Chunk{
+		ID:         c.ID,
+		UserID:     c.UserID,
+		DocumentID: c.DocumentID,
+		Text:       c.Text,
+	}
+}
+
+func (p *postgres) CreateChunk(ctx context.Context, userID, documentID int64, title, text string) (*domain.Chunk, error) {
 	c, err := p.q.CreateChunk(ctx, queries.CreateChunkParams{
 		UserID:     userID,
 		DocumentID: documentID,
+		Title:      title,
 		Text:       text,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return chunkToDomain(c), nil
+	return chunkRowToDomain(c), nil
 }
 
 func (p *postgres) GetChunksByDocumentID(ctx context.Context, documentID, userID int64) ([]domain.Chunk, error) {
@@ -54,10 +64,11 @@ func (p *postgres) GetChunksByDocumentID(ctx context.Context, documentID, userID
 	return domainChunks, nil
 }
 
-func (p *postgres) SearchUserChunks(ctx context.Context, userID int64, embedding pgvector.Vector, limit int32) ([]domain.SearchResult, error) {
+func (p *postgres) SearchUserChunks(ctx context.Context, userID int64, embedding []float32, limit int32) ([]domain.SearchResult, error) {
+	queryVector := pgvector.NewVector(embedding)
 	results, err := p.q.SearchUserChunks(ctx, queries.SearchUserChunksParams{
 		UserID:    userID,
-		Embedding: embedding,
+		Embedding: queryVector,
 		Limit:     limit,
 	})
 	if err != nil {
@@ -82,11 +93,12 @@ func (p *postgres) SearchUserChunks(ctx context.Context, userID int64, embedding
 	return domainResults, nil
 }
 
-func (p *postgres) SearchChunksInDocument(ctx context.Context, userID, documentID int64, embedding pgvector.Vector, limit int32) ([]domain.SearchResult, error) {
+func (p *postgres) SearchChunksInDocument(ctx context.Context, userID, documentID int64, embedding []float32, limit int32) ([]domain.SearchResult, error) {
+	queryVector := pgvector.NewVector(embedding)
 	results, err := p.q.SearchChunksInDocument(ctx, queries.SearchChunksInDocumentParams{
 		UserID:     userID,
 		DocumentID: documentID,
-		Embedding:  embedding,
+		Embedding:  queryVector,
 		Limit:      limit,
 	})
 	if err != nil {

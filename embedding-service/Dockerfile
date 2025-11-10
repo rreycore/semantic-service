@@ -8,8 +8,7 @@ RUN rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-COPY pyproject.toml uv.lock ./
-RUN pip install uv && uv sync --frozen --no-install-project
+COPY pyproject.toml ./
 
 COPY . .
 

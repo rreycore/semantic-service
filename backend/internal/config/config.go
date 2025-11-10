@@ -49,29 +49,24 @@ type (
 	}
 )
 
-func Init(cfgPath, globalCfgPath, envPath string) (*Config, error) {
+func Init(cfgPath, dbEnvPath, backendEnvPath string) (*Config, error) {
 	v := viper.New()
-
-	v.AddConfigPath(filepath.Dir(globalCfgPath))
-	v.SetConfigName(filepath.Base(globalCfgPath))
-	if err := v.ReadInConfig(); err != nil {
-		return nil, fmt.Errorf("err on read global config '%s': %w", globalCfgPath, err)
-	}
 
 	v.AddConfigPath(filepath.Dir(cfgPath))
 	v.SetConfigName(filepath.Base(cfgPath))
-	if err := v.MergeInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
-			return nil, fmt.Errorf("err on read local config '%s': %w", cfgPath, err)
-		}
+	if err := v.ReadInConfig(); err != nil {
+		return nil, fmt.Errorf("err on read config '%s': %w", cfgPath, err)
 	}
 
-	v.SetConfigFile(envPath)
-	if err := v.MergeInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
-			return nil, fmt.Errorf("failed to read .env file: %w", err)
-		}
-	}
+	v.SetConfigFile(dbEnvPath)
+	v.SetConfigType("env")
+
+	_ = v.MergeInConfig()
+
+	v.SetConfigFile(backendEnvPath)
+	v.SetConfigType("env")
+
+	_ = v.MergeInConfig()
 
 	v.AutomaticEnv()
 
@@ -94,7 +89,7 @@ func Init(cfgPath, globalCfgPath, envPath string) (*Config, error) {
 			Secret: v.GetString("JWT_SECRET"),
 		},
 		Server: &ServerConfig{
-			Port:           v.GetInt("backend.port"),
+			Port:           v.GetInt("server.port"),
 			ReadTimeout:    v.GetDuration("server.readTimeout"),
 			WriteTimeout:   v.GetDuration("server.writeTimeout"),
 			MaxHeaderBytes: v.GetInt("server.maxHeaderBytes"),

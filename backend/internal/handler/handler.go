@@ -17,7 +17,7 @@ type MyHandler interface {
 	Init() http.Handler
 }
 
-//go:generate just oapi-codegen
+//go:generate go tool oapi-codegen -config ../../codegen.yaml ../../../openapi.yaml
 type handler struct {
 	cfg       *config.HandlerConfig
 	service   service.Service
@@ -42,7 +42,14 @@ func NewHandler(
 func (h *handler) Init() http.Handler {
 	r := chi.NewRouter()
 
-	r.Use(cors.AllowAll().Handler)
+	r.Use(cors.New(cors.Options{
+		AllowedOrigins:   []string{"http://localhost:3000"},
+		AllowCredentials: true,
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		ExposedHeaders:   []string{"Link"},
+		MaxAge:           300,
+	}).Handler)
 
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RequestID)
@@ -91,6 +98,7 @@ func (h *handler) Init() http.Handler {
 			r.Get("/{documentID}", wrapper.GetDocumentByID)
 			r.Delete("/{documentID}", wrapper.DeleteDocument)
 			r.Post("/{documentID}/search", wrapper.SearchInDocument)
+			r.Post("/search", wrapper.Search)
 		})
 	})
 

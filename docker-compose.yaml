@@ -1,14 +1,14 @@
 services:
   backend:
     build:
-      context: backend
+      context: .
+      dockerfile: backend/Dockerfile
     ports:
-      - "8000:8000"
-    env_file: .env
-    environment:
-      - POSTGRES_HOST=timescaledb
-      - POSTGRES_PORT=5432
-    command: -cfg configs/prod
+      - 127.0.0.1:8000:8000
+    env_file:
+      - .env.db
+      - .env.backend
+      - .env.docker
     depends_on:
       timescaledb:
         condition: service_healthy
@@ -18,10 +18,11 @@ services:
 
   frontend:
     build:
-      context: frontend
-    env_file: .env
+      context: .
+      dockerfile: frontend/Dockerfile
+    env_file: frontend/.env
     ports:
-      - "3000:3000"
+      - 127.0.0.1:3000:3000
     depends_on:
       - backend
     restart: unless-stopped
@@ -29,12 +30,14 @@ services:
   embedding-service:
     build:
       context: embedding-service
+    env_file:
+      - .env.embedding-service
     ports:
-      - "8001:8000"
+      - 127.0.0.1:8001:8000
     volumes:
       - ~/.cache/huggingface/hub:/root/.cache/huggingface/hub
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/ping"]
+      test: curl -f http://localhost:8000/ping
       interval: 10s
       timeout: 5s
       retries: 60
@@ -44,14 +47,14 @@ services:
   timescaledb:
     image: timescale/timescaledb-ha:pg17
     pull_policy: always
-    env_file: .env
+    env_file: .env.db
     volumes:
       - timescaledb_data:/var/lib/postgresql/data
     ports:
       - 127.0.0.1:5433:5432
     restart: unless-stopped
     healthcheck:
-      test: pg_isready -d db -U postgres
+      test: pg_isready -d $$POSTGRES_DB -U $$POSTGRES_USER
       interval: 10s
       timeout: 5s
       retries: 5
@@ -59,35 +62,33 @@ services:
   vectorizer-worker:
     image: timescale/pgai-vectorizer-worker
     environment:
-      PGAI_VECTORIZER_WORKER_DB_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb:5432/${POSTGRES_DB}?sslmode=disable
-      OPENAI_BASE_URL: http://localhost:8001
+      PGAI_VECTORIZER_WORKER_DB_URL: postgres://${POSTGRES_USER:-}:${POSTGRES_PASSWORD:-}@${POSTGRES_HOST:-}:${POSTGRES_PORT:-}/${POSTGRES_DB:-}?sslmode=${POSTGRES_SSLMODE:-}
+      OPENAI_BASE_URL: http://embedding-service:8000
       OPENAI_API_KEY: api_key
     command: --poll-interval 20s
     depends_on:
-      - timescaledb
+      timescaledb:
+        condition: service_healthy
+
+  vectorizer-setup:
+    image: timescale/pgai-vectorizer-worker
+    entrypoint: sh -c "python -m pgai install -d 'postgres://${POSTGRES_USER:-}:${POSTGRES_PASSWORD:-}@${POSTGRES_HOST:-}:${POSTGRES_PORT:-}/${POSTGRES_DB:-}?sslmode=${POSTGRES_SSLMODE:-}'"
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    profiles:
+      - tools
 
   db-migration:
     build:
       context: backend
       dockerfile: migrate.Dockerfile
-    env_file: .env
-    environment:
-      - POSTGRES_HOST=timescaledb
-      - POSTGRES_PORT=5432
+    env_file:
+      - .env.db
+      - .env.docker
     depends_on:
-      - timescaledb
-    profiles:
-      - tools
-
-  pgai-setup:
-    build:
-      context: pgai-setup
-    env_file: .env
-    environment:
-      - POSTGRES_HOST=timescaledb
-      - POSTGRES_PORT=5432
-    depends_on:
-      - timescaledb
+      timescaledb:
+        condition: service_healthy
     profiles:
       - tools
 

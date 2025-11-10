@@ -1,9 +1,9 @@
 -- name: CreateChunk :one
 -- Создает один чанк для документа.
 -- Поле 'embedding' здесь не передается, оно будет NULL при первичной вставке.
-INSERT INTO chunks (user_id, document_id, text)
-VALUES ($1, $2, $3)
-RETURNING *;
+INSERT INTO chunks (user_id, document_id, title, text)
+VALUES ($1, $2, $3, $4)
+RETURNING id, user_id, document_id, title, text;
 
 -- name: GetChunksByDocumentID :many
 -- Возвращает все чанки для конкретного документа (для отображения или сборки полного текста).

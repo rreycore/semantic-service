@@ -1,6 +1,0 @@
-.env
-__pycache__
-.venv
-pyrefly.toml
-README.md
-uv.lock

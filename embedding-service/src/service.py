@@ -18,10 +18,10 @@ class Service:
             model_name_or_path=model,
             device=device,
             truncate_dim=dimensions,
-            # backend="onnx",
         )
 
     @batched.dynamically(batch_size=100, timeout_ms=100)
     def gen_embeddings(self, documents: str | list[str]) -> list[list[float]]:
         embeddings: np.ndarray = self.model.encode(documents)
-        return embeddings.tolist()
+        embeddings_32 = embeddings.astype(np.float32)
+        return embeddings_32.tolist()

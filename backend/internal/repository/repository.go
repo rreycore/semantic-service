@@ -10,7 +10,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-//go:generate just sqlc-generate
+//go:generate go tool sqlc generate -f ../../db/sqlc/sqlc.yaml
 type Repository interface {
 	WithTransaction(ctx context.Context, fn func(repo Repository) error) error
 

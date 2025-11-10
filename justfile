@@ -1,7 +1,6 @@
-set dotenv-load
+default: timescaledb db-setup vectorizer-worker up-all
 
-default: timescaledb db-setup up-all
-
+db-setup: vectorizer-setup migrate-up
 
 backend:
     cd backend && go run cmd/app/main.go
@@ -14,35 +13,28 @@ up-all:
 
 generate:
     cd backend && go generate ./...
-
-sqlc-generate:
-    cd backend && go tool sqlc generate -f db/sqlc/sqlc.yaml
-
-oapi-codegen:
-    cd backend && go tool oapi-codegen -config codegen.yaml openapi.yaml
+    cd frontend && bun run generate-api
 
 show-api-docs:
     docker run --rm -p 8080:8080 -v "{{justfile_directory()}}/openapi.yaml":/usr/share/nginx/html/openapi.yaml -e URL=openapi.yaml swaggerapi/swagger-ui
 
-migrate-up:
-    docker compose run --rm --build db-migration
-
-migrate-down:
-    docker compose run --rm --build db-migration down
-
-pgai-setup:
-    docker compose run --rm --build pgai-setup
-
-db-setup: pgai-setup migrate-up
-
-setup-vectorizer:
-    docker compose run --rm --entrypoint "python -m pgai install -d postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@$POSTGRES_HOST:$POSTGRES_PORT/$POSTGRES_DB" vectorizer-worker
-
 timescaledb:
     docker compose up timescaledb -d
 
+migrate-up:
+    docker compose run --rm --no-deps --build db-migration
+
+migrate-down:
+    docker compose run --rm --no-deps --build db-migration down
+
+vectorizer-setup:
+    docker compose --env-file .env.db --env-file .env.docker run --rm --no-deps vectorizer-setup
+
 vectorizer-worker:
-    docker compose up vectorizer-worker -d
+    docker compose --env-file .env.db --env-file .env.docker up vectorizer-worker -d
+
+embedding-service:
+    docker compose up embedding-service -d
 
 update-timescaledb:
     docker compose pull timescaledb

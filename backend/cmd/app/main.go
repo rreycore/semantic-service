@@ -25,16 +25,16 @@ import (
 
 func main() {
 	var cfgPath string
-	var globalCfgPath string
-	var envPath string
+	var dbEnvPath string
+	var backendEnvPath string
 
-	flag.StringVar(&cfgPath, "cfg", "configs/local", "config path")
-	flag.StringVar(&globalCfgPath, "globCfg", "../configs/g-local", "global config path")
-	flag.StringVar(&envPath, "env", "../.env", "path to .env file")
+	flag.StringVar(&cfgPath, "cfg", "configs/local", "backend config path")
+	flag.StringVar(&dbEnvPath, "db-env", "../.env.db", "path to db .env file")
+	flag.StringVar(&backendEnvPath, "backend-env", "../.env.backend", "path to backend .env file")
 
 	flag.Parse()
 
-	cfg, err := config.Init(cfgPath, globalCfgPath, envPath)
+	cfg, err := config.Init(cfgPath, dbEnvPath, backendEnvPath)
 	if err != nil {
 		log.Fatalf("failed to init config: %v", err)
 	}

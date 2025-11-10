@@ -20,11 +20,13 @@ create table documents (
     filename text not null
 );
 create index if not exists documents_user_id_idx on documents (user_id);
+create index if not exists documents_filename_idx on documents (filename);
 
 create table chunks (
     id bigserial primary key,
     user_id bigint not null references users(id) on delete cascade,
     document_id bigint not null references documents(id) on delete cascade,
+    title varchar(512) not null,
     text text not null,
     embedding vector(768)
 );

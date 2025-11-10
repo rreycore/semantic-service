@@ -34,7 +34,7 @@ type EmbeddingResponse struct {
 
 type EmbeddingData struct {
 	Object    string    `json:"object"`
-	Embedding []float64 `json:"embedding"` // float в Python обычно соответствует float64 в Go
+	Embedding []float32 `json:"embedding"`
 	Index     int       `json:"index"`
 }
 
@@ -92,9 +92,17 @@ func (c *Client) Ping(ctx context.Context) (string, error) {
 	return string(body), nil
 }
 
-// CreateEmbeddings запрашивает векторные представления для одного или нескольких текстов.
-func (c *Client) CreateEmbeddings(ctx context.Context, req EmbeddingRequest) (*EmbeddingResponse, error) {
-	// Валидация входных данных
+func (c *Client) CreateSearchEmbedding(ctx context.Context, query string) (*EmbeddingResponse, error) {
+	formattedQuery := fmt.Sprintf("task: search result | query: %s", query)
+
+	request := EmbeddingRequest{
+		Input: formattedQuery,
+	}
+
+	return c.createEmbeddings(ctx, request)
+}
+
+func (c *Client) createEmbeddings(ctx context.Context, req EmbeddingRequest) (*EmbeddingResponse, error) {
 	if req.Input == nil {
 		return nil, fmt.Errorf("input cannot be nil")
 	}
@@ -105,13 +113,11 @@ func (c *Client) CreateEmbeddings(ctx context.Context, req EmbeddingRequest) (*E
 		return nil, fmt.Errorf("input must be a string or a slice of strings")
 	}
 
-	// Кодируем тело запроса в JSON
 	requestBody, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request body: %w", err)
 	}
 
-	// Создаем HTTP-запрос
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/embeddings", bytes.NewBuffer(requestBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create embeddings request: %w", err)
@@ -119,18 +125,15 @@ func (c *Client) CreateEmbeddings(ctx context.Context, req EmbeddingRequest) (*E
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "application/json")
 
-	// Выполняем запрос
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute embeddings request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// Обрабатываем ответ
 	if resp.StatusCode != http.StatusOK {
 		var errResp ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
-			// Если не удалось распарсить JSON ошибки, возвращаем просто статус
 			return nil, fmt.Errorf("request failed with status code %d and invalid error response", resp.StatusCode)
 		}
 		return nil, fmt.Errorf("request failed with status code %d: %s", resp.StatusCode, errResp.Detail)

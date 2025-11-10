@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	BearerAuthScopes = "BearerAuth.Scopes"
+	CookieAuthScopes = "CookieAuth.Scopes"
 )
 
 // Document defines model for Document.
@@ -38,11 +38,6 @@ type LoginRequest struct {
 	Password string              `json:"password"`
 }
 
-// LoginResponse defines model for LoginResponse.
-type LoginResponse struct {
-	AccessToken *string `json:"access_token,omitempty"`
-}
-
 // RegisterRequest defines model for RegisterRequest.
 type RegisterRequest struct {
 	Email    openapi_types.Email `json:"email"`
@@ -60,6 +55,7 @@ type SearchResult struct {
 	DocumentID *int64   `json:"documentID,omitempty"`
 	Id         *int64   `json:"id,omitempty"`
 	Text       *string  `json:"text,omitempty"`
+	Title      *string  `json:"title,omitempty"`
 }
 
 // User defines model for User.
@@ -81,6 +77,9 @@ type RegisterJSONRequestBody = RegisterRequest
 
 // UploadDocumentMultipartRequestBody defines body for UploadDocument for multipart/form-data ContentType.
 type UploadDocumentMultipartRequestBody UploadDocumentMultipartBody
+
+// SearchJSONRequestBody defines body for Search for application/json ContentType.
+type SearchJSONRequestBody = SearchRequest
 
 // SearchInDocumentJSONRequestBody defines body for SearchInDocument for application/json ContentType.
 type SearchInDocumentJSONRequestBody = SearchRequest
@@ -108,6 +107,9 @@ type ServerInterface interface {
 	// Загрузить новый документ
 	// (POST /documents)
 	UploadDocument(w http.ResponseWriter, r *http.Request)
+	// Семантический поиск по всем документам
+	// (POST /documents/search)
+	Search(w http.ResponseWriter, r *http.Request)
 	// Удалить документ
 	// (DELETE /documents/{documentID})
 	DeleteDocument(w http.ResponseWriter, r *http.Request, documentID int64)
@@ -171,6 +173,12 @@ func (_ Unimplemented) UploadDocument(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Семантический поиск по всем документам
+// (POST /documents/search)
+func (_ Unimplemented) Search(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Удалить документ
 // (DELETE /documents/{documentID})
 func (_ Unimplemented) DeleteDocument(w http.ResponseWriter, r *http.Request, documentID int64) {
@@ -215,7 +223,7 @@ func (siw *ServerInterfaceWrapper) FullLogout(w http.ResponseWriter, r *http.Req
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
 
 	r = r.WithContext(ctx)
 
@@ -249,7 +257,7 @@ func (siw *ServerInterfaceWrapper) Logout(w http.ResponseWriter, r *http.Request
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
 
 	r = r.WithContext(ctx)
 
@@ -297,7 +305,7 @@ func (siw *ServerInterfaceWrapper) ListUserDocuments(w http.ResponseWriter, r *h
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
 
 	r = r.WithContext(ctx)
 
@@ -317,12 +325,32 @@ func (siw *ServerInterfaceWrapper) UploadDocument(w http.ResponseWriter, r *http
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
 
 	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UploadDocument(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// Search operation middleware
+func (siw *ServerInterfaceWrapper) Search(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Search(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -348,7 +376,7 @@ func (siw *ServerInterfaceWrapper) DeleteDocument(w http.ResponseWriter, r *http
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
 
 	r = r.WithContext(ctx)
 
@@ -379,7 +407,7 @@ func (siw *ServerInterfaceWrapper) GetDocumentByID(w http.ResponseWriter, r *htt
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
 
 	r = r.WithContext(ctx)
 
@@ -410,7 +438,7 @@ func (siw *ServerInterfaceWrapper) SearchInDocument(w http.ResponseWriter, r *ht
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
 
 	r = r.WithContext(ctx)
 
@@ -444,7 +472,7 @@ func (siw *ServerInterfaceWrapper) GetUserProfile(w http.ResponseWriter, r *http
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
 
 	r = r.WithContext(ctx)
 
@@ -594,6 +622,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/documents", wrapper.UploadDocument)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/documents/search", wrapper.Search)
+	})
+	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/documents/{documentID}", wrapper.DeleteDocument)
 	})
 	r.Group(func(r chi.Router) {
@@ -647,17 +678,14 @@ type Login200ResponseHeaders struct {
 	SetCookie string
 }
 
-type Login200JSONResponse struct {
-	Body    LoginResponse
+type Login200Response struct {
 	Headers Login200ResponseHeaders
 }
 
-func (response Login200JSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
+func (response Login200Response) VisitLoginResponse(w http.ResponseWriter) error {
 	w.Header().Set("Set-Cookie", fmt.Sprint(response.Headers.SetCookie))
 	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response.Body)
+	return nil
 }
 
 type Login400Response struct {
@@ -716,17 +744,14 @@ type Refresh200ResponseHeaders struct {
 	SetCookie string
 }
 
-type Refresh200JSONResponse struct {
-	Body    LoginResponse
+type Refresh200Response struct {
 	Headers Refresh200ResponseHeaders
 }
 
-func (response Refresh200JSONResponse) VisitRefreshResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
+func (response Refresh200Response) VisitRefreshResponse(w http.ResponseWriter) error {
 	w.Header().Set("Set-Cookie", fmt.Sprint(response.Headers.SetCookie))
 	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response.Body)
+	return nil
 }
 
 type Refresh401Response struct {
@@ -749,17 +774,14 @@ type Register201ResponseHeaders struct {
 	SetCookie string
 }
 
-type Register201JSONResponse struct {
-	Body    LoginResponse
+type Register201Response struct {
 	Headers Register201ResponseHeaders
 }
 
-func (response Register201JSONResponse) VisitRegisterResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
+func (response Register201Response) VisitRegisterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Set-Cookie", fmt.Sprint(response.Headers.SetCookie))
 	w.WriteHeader(201)
-
-	return json.NewEncoder(w).Encode(response.Body)
+	return nil
 }
 
 type Register400JSONResponse Error
@@ -843,6 +865,47 @@ type UploadDocument401Response struct {
 
 func (response UploadDocument401Response) VisitUploadDocumentResponse(w http.ResponseWriter) error {
 	w.WriteHeader(401)
+	return nil
+}
+
+type SearchRequestObject struct {
+	Body *SearchJSONRequestBody
+}
+
+type SearchResponseObject interface {
+	VisitSearchResponse(w http.ResponseWriter) error
+}
+
+type Search200JSONResponse []SearchResult
+
+func (response Search200JSONResponse) VisitSearchResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type Search400Response struct {
+}
+
+func (response Search400Response) VisitSearchResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
+type Search401Response struct {
+}
+
+func (response Search401Response) VisitSearchResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type Search404Response struct {
+}
+
+func (response Search404Response) VisitSearchResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
 	return nil
 }
 
@@ -1017,6 +1080,9 @@ type StrictServerInterface interface {
 	// Загрузить новый документ
 	// (POST /documents)
 	UploadDocument(ctx context.Context, request UploadDocumentRequestObject) (UploadDocumentResponseObject, error)
+	// Семантический поиск по всем документам
+	// (POST /documents/search)
+	Search(ctx context.Context, request SearchRequestObject) (SearchResponseObject, error)
 	// Удалить документ
 	// (DELETE /documents/{documentID})
 	DeleteDocument(ctx context.Context, request DeleteDocumentRequestObject) (DeleteDocumentResponseObject, error)
@@ -1245,6 +1311,37 @@ func (sh *strictHandler) UploadDocument(w http.ResponseWriter, r *http.Request) 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UploadDocumentResponseObject); ok {
 		if err := validResponse.VisitUploadDocumentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// Search operation middleware
+func (sh *strictHandler) Search(w http.ResponseWriter, r *http.Request) {
+	var request SearchRequestObject
+
+	var body SearchJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.Search(ctx, request.(SearchRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "Search")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SearchResponseObject); ok {
+		if err := validResponse.VisitSearchResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

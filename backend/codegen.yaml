@@ -5,4 +5,4 @@ generate:
   chi-server: true
   strict-server: true
 
-output: internal/handler/api.gen.go
+output: api.gen.go
