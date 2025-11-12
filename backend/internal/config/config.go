@@ -13,13 +13,13 @@ type (
 	Config struct {
 		LogLevel  zerolog.Level
 		Server    *ServerConfig
-		Db        *Db
+		Db        *DbConfig
 		Handler   *HandlerConfig
 		JWT       *JWTConfig
 		Embedding *EmbeddingConfig
 	}
 
-	Db struct {
+	DbConfig struct {
 		Host     string
 		User     string
 		Password string
@@ -77,7 +77,7 @@ func Init(cfgPath, dbEnvPath, backendEnvPath string) (*Config, error) {
 
 	return &Config{
 		LogLevel: level,
-		Db: &Db{
+		Db: &DbConfig{
 			Host:     v.GetString("POSTGRES_HOST"),
 			User:     v.GetString("POSTGRES_USER"),
 			Password: v.GetString("POSTGRES_PASSWORD"),
@@ -104,7 +104,7 @@ func Init(cfgPath, dbEnvPath, backendEnvPath string) (*Config, error) {
 	}, nil
 }
 
-func (p *Db) GetUrl() string {
+func (p *DbConfig) GetUrl() string {
 	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 		p.Host, p.Port, p.User, p.Password, p.DB, p.SSLMode)
 }
