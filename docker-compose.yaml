@@ -38,10 +38,10 @@ services:
       - ~/.cache/huggingface/hub:/root/.cache/huggingface/hub
     healthcheck:
       test: curl -f http://localhost:8000/ping
-      interval: 10s
-      timeout: 5s
-      retries: 60
-      start_period: 5s
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 4s
     restart: unless-stopped
 
   timescaledb:
@@ -61,18 +61,33 @@ services:
 
   vectorizer-worker:
     image: timescale/pgai-vectorizer-worker
+    env_file:
+      - .env.db
+      - .env.docker
     environment:
-      PGAI_VECTORIZER_WORKER_DB_URL: postgres://${POSTGRES_USER:-}:${POSTGRES_PASSWORD:-}@${POSTGRES_HOST:-}:${POSTGRES_PORT:-}/${POSTGRES_DB:-}?sslmode=${POSTGRES_SSLMODE:-}
       OPENAI_BASE_URL: http://embedding-service:8000
       OPENAI_API_KEY: api_key
-    command: --poll-interval 20s
+    entrypoint: sh
+    command:
+      - -c
+      - |
+        export PGAI_VECTORIZER_WORKER_DB_URL="postgres://$$POSTGRES_USER:$$POSTGRES_PASSWORD@$$POSTGRES_HOST:$$POSTGRES_PORT/$$POSTGRES_DB?sslmode=$$POSTGRES_SSLMODE"
+        exec python -m pgai vectorizer worker --poll-interval 20s
     depends_on:
       timescaledb:
         condition: service_healthy
 
   vectorizer-setup:
     image: timescale/pgai-vectorizer-worker
-    entrypoint: sh -c "python -m pgai install -d 'postgres://${POSTGRES_USER:-}:${POSTGRES_PASSWORD:-}@${POSTGRES_HOST:-}:${POSTGRES_PORT:-}/${POSTGRES_DB:-}?sslmode=${POSTGRES_SSLMODE:-}'"
+    env_file:
+      - .env.db
+      - .env.docker
+    entrypoint: sh
+    command:
+      - -c
+      - |
+        DB_URL="postgres://$$POSTGRES_USER:$$POSTGRES_PASSWORD@$$POSTGRES_HOST:$$POSTGRES_PORT/$$POSTGRES_DB?sslmode=$$POSTGRES_SSLMODE"
+        exec python -m pgai install -d "$$DB_URL"
     depends_on:
       timescaledb:
         condition: service_healthy

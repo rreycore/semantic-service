@@ -339,6 +339,12 @@ components:
           example: user@example.com
     Document:
       type: object
+      required:
+        - id
+        - userID
+        - filename
+        - nullEmbeddings
+        - totalEmbeddings
       properties:
         id:
           type: integer
@@ -351,6 +357,12 @@ components:
         filename:
           type: string
           example: "my_notes.txt"
+        nullEmbeddings:
+          type: integer
+          format: int64
+        totalEmbeddings:
+          type: integer
+          format: int64
     SearchResult:
       type: object
       properties:

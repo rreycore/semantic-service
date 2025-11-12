@@ -20,7 +20,6 @@ func (h *handler) UploadDocument(ctx context.Context, request UploadDocumentRequ
 		return UploadDocument400Response{}, fmt.Errorf("invalid user ID in token")
 	}
 	userID := int64(userIDFloat)
-	h.log.Info().Int64("user_id", userID).Msg("Начало обработки загрузки документа")
 
 	// 2. Получаем multipart reader
 	multipartReader := request.Body
@@ -46,11 +45,6 @@ func (h *handler) UploadDocument(ctx context.Context, request UploadDocumentRequ
 
 		partName := part.FormName()
 		partFilename := part.FileName()
-
-		h.log.Debug().
-			Str("part_name", partName).
-			Str("part_filename", partFilename).
-			Msg("Обработка части формы")
 
 		// Проверяем, что это файл и он .txt
 		if partName == "file" {
@@ -134,29 +128,32 @@ func (h *handler) UploadDocument(ctx context.Context, request UploadDocumentRequ
 		Msg("Документ успешно загружен и обработан")
 
 	return UploadDocument201JSONResponse{
-		Id:       &doc.ID,
-		UserID:   &doc.UserID,
-		Filename: &doc.Filename,
+		Id:              doc.ID,
+		UserID:          doc.UserID,
+		Filename:        doc.Filename,
+		NullEmbeddings:  doc.NullEmbeddings,
+		TotalEmbeddings: doc.TotalEmbeddings,
 	}, nil
 }
 
-// ListUserDocuments реализует StrictServerInterface.
 func (h *handler) ListUserDocuments(ctx context.Context, request ListUserDocumentsRequestObject) (ListUserDocumentsResponseObject, error) {
 	_, claims, _ := jwtauth.FromContext(ctx)
 	userID := int64(claims["user_id"].(float64))
 
 	docs, err := h.service.ListUserDocuments(ctx, userID)
 	if err != nil {
+		h.log.Error().Err(err).Int64("userID", userID).Msg("HANDLER ERROR: Ошибка сервиса")
 		return nil, err
 	}
 
-	// Конвертируем []service.Document в []Document (сгенерированный тип)
 	responseDocs := make(ListUserDocuments200JSONResponse, len(docs))
 	for i, d := range docs {
 		responseDocs[i] = Document{
-			Id:       &d.ID,
-			UserID:   &d.UserID,
-			Filename: &d.Filename,
+			Id:              d.ID,
+			UserID:          d.UserID,
+			Filename:        d.Filename,
+			NullEmbeddings:  d.NullEmbeddings,
+			TotalEmbeddings: d.TotalEmbeddings,
 		}
 	}
 
@@ -196,6 +193,7 @@ func (h *handler) Search(ctx context.Context, request SearchRequestObject) (Sear
 			Id:         &r.ID,
 			DocumentID: &r.DocumentID,
 			Text:       &r.Text,
+			Title:      &r.Title,
 			Distance:   &r.Distance,
 		}
 	}
@@ -230,14 +228,13 @@ func (h *handler) SearchInDocument(ctx context.Context, request SearchInDocument
 	return responseResults, nil
 }
 
-// GetDocumentByID реализует StrictServerInterface.
 func (h *handler) GetDocumentByID(ctx context.Context, request GetDocumentByIDRequestObject) (GetDocumentByIDResponseObject, error) {
 	_, claims, _ := jwtauth.FromContext(ctx)
 	userID := int64(claims["user_id"].(float64))
 
 	docID := request.DocumentID
 
-	doc, err := h.service.GetDocumentByID(ctx, userID, docID)
+	d, err := h.service.GetDocumentByID(ctx, userID, docID)
 	if err != nil {
 		if errors.Is(err, service.ErrDocumentNotFound) {
 			return GetDocumentByID404Response{}, nil
@@ -246,8 +243,10 @@ func (h *handler) GetDocumentByID(ctx context.Context, request GetDocumentByIDRe
 	}
 
 	return GetDocumentByID200JSONResponse{
-		Id:       &doc.ID,
-		UserID:   &doc.UserID,
-		Filename: &doc.Filename,
+		Id:              d.ID,
+		UserID:          d.UserID,
+		Filename:        d.Filename,
+		NullEmbeddings:  d.NullEmbeddings,
+		TotalEmbeddings: d.TotalEmbeddings,
 	}, nil
 }

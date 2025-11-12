@@ -22,9 +22,11 @@ const (
 
 // Document defines model for Document.
 type Document struct {
-	Filename *string `json:"filename,omitempty"`
-	Id       *int64  `json:"id,omitempty"`
-	UserID   *int64  `json:"userID,omitempty"`
+	Filename        string `json:"filename"`
+	Id              int64  `json:"id"`
+	NullEmbeddings  int64  `json:"nullEmbeddings"`
+	TotalEmbeddings int64  `json:"totalEmbeddings"`
+	UserID          int64  `json:"userID"`
 }
 
 // Error defines model for Error.

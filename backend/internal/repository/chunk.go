@@ -34,6 +34,16 @@ func chunkRowToDomain(c queries.CreateChunkRow) *domain.Chunk {
 	}
 }
 
+func searchResultToDomain(c queries.SearchUserChunksRow) *domain.SearchResult {
+	return &domain.SearchResult{
+		ID:         c.ID,
+		DocumentID: c.DocumentID,
+		Title:      c.Title,
+		Text:       c.Text,
+		Distance:   c.Distance.(float64),
+	}
+}
+
 func (p *postgres) CreateChunk(ctx context.Context, userID, documentID int64, title, text string) (*domain.Chunk, error) {
 	c, err := p.q.CreateChunk(ctx, queries.CreateChunkParams{
 		UserID:     userID,
@@ -77,17 +87,12 @@ func (p *postgres) SearchUserChunks(ctx context.Context, userID int64, embedding
 
 	domainResults := make([]domain.SearchResult, len(results))
 	for i, r := range results {
-		distance, ok := r.Distance.(float64)
+		_, ok := r.Distance.(float64)
 		if !ok {
 			return nil, fmt.Errorf("unexpected type for distance: %T", r.Distance)
 		}
 
-		domainResults[i] = domain.SearchResult{
-			ID:         r.ID,
-			DocumentID: r.DocumentID,
-			Text:       r.Text,
-			Distance:   distance,
-		}
+		domainResults[i] = *searchResultToDomain(r)
 	}
 
 	return domainResults, nil

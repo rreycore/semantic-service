@@ -19,6 +19,7 @@ ORDER BY id; -- Сортировка по ID, чтобы чанки шли в п
 SELECT
     id,
     document_id,
+    title,
     text,
     embedding <=> $1 AS distance -- Рассчитываем косинусное расстояние до вектора-запроса
 FROM chunks

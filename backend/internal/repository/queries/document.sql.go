@@ -47,9 +47,18 @@ func (q *Queries) DeleteUserDocument(ctx context.Context, arg DeleteUserDocument
 }
 
 const getUserDocumentByID = `-- name: GetUserDocumentByID :one
-SELECT id, user_id, filename
-FROM documents
-WHERE id = $1 AND user_id = $2
+SELECT
+  d.id,
+  d.user_id,
+  d.filename,
+  (
+    SELECT COUNT(*) FROM chunks c WHERE c.document_id = d.id AND c.embedding IS NULL
+  ) AS null_embeddings_count,
+  (
+    SELECT COUNT(*) FROM chunks c WHERE c.document_id = d.id
+  ) AS total_embeddings_count
+FROM documents d
+WHERE d.id = $1 AND d.user_id = $2
 LIMIT 1
 `
 
@@ -58,33 +67,69 @@ type GetUserDocumentByIDParams struct {
 	UserID int64
 }
 
+type GetUserDocumentByIDRow struct {
+	ID                   int64
+	UserID               int64
+	Filename             string
+	NullEmbeddingsCount  int64
+	TotalEmbeddingsCount int64
+}
+
 // Находит конкретный документ по его ID.
 // ВАЖНО: также проверяет user_id для безопасности, чтобы пользователь не мог получить чужой документ.
-func (q *Queries) GetUserDocumentByID(ctx context.Context, arg GetUserDocumentByIDParams) (Document, error) {
+func (q *Queries) GetUserDocumentByID(ctx context.Context, arg GetUserDocumentByIDParams) (GetUserDocumentByIDRow, error) {
 	row := q.db.QueryRow(ctx, getUserDocumentByID, arg.ID, arg.UserID)
-	var i Document
-	err := row.Scan(&i.ID, &i.UserID, &i.Filename)
+	var i GetUserDocumentByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Filename,
+		&i.NullEmbeddingsCount,
+		&i.TotalEmbeddingsCount,
+	)
 	return i, err
 }
 
 const getUserDocuments = `-- name: GetUserDocuments :many
-SELECT id, user_id, filename
-FROM documents
-WHERE user_id = $1
-ORDER BY filename
+SELECT
+  d.id,
+  d.user_id,
+  d.filename,
+  (
+    SELECT COUNT(*) FROM chunks c WHERE c.document_id = d.id AND c.embedding IS NULL
+  ) AS null_embeddings_count,
+  (
+    SELECT COUNT(*) FROM chunks c WHERE c.document_id = d.id
+  ) AS total_embeddings_count
+FROM documents d
+WHERE d.user_id = $1
 `
 
-// Возвращает список всех документов для конкретного пользователя.
-func (q *Queries) GetUserDocuments(ctx context.Context, userID int64) ([]Document, error) {
+type GetUserDocumentsRow struct {
+	ID                   int64
+	UserID               int64
+	Filename             string
+	NullEmbeddingsCount  int64
+	TotalEmbeddingsCount int64
+}
+
+// Возвращает список всех документов для конкретного пользователя, включая количество необработанных и общее количество эмбеддингов.
+func (q *Queries) GetUserDocuments(ctx context.Context, userID int64) ([]GetUserDocumentsRow, error) {
 	rows, err := q.db.Query(ctx, getUserDocuments, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Document
+	var items []GetUserDocumentsRow
 	for rows.Next() {
-		var i Document
-		if err := rows.Scan(&i.ID, &i.UserID, &i.Filename); err != nil {
+		var i GetUserDocumentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Filename,
+			&i.NullEmbeddingsCount,
+			&i.TotalEmbeddingsCount,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

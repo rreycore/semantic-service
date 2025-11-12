@@ -157,6 +157,7 @@ const searchUserChunks = `-- name: SearchUserChunks :many
 SELECT
     id,
     document_id,
+    title,
     text,
     embedding <=> $1 AS distance -- Рассчитываем косинусное расстояние до вектора-запроса
 FROM chunks
@@ -174,6 +175,7 @@ type SearchUserChunksParams struct {
 type SearchUserChunksRow struct {
 	ID         int64
 	DocumentID int64
+	Title      string
 	Text       string
 	Distance   interface{}
 }
@@ -193,6 +195,7 @@ func (q *Queries) SearchUserChunks(ctx context.Context, arg SearchUserChunksPara
 		if err := rows.Scan(
 			&i.ID,
 			&i.DocumentID,
+			&i.Title,
 			&i.Text,
 			&i.Distance,
 		); err != nil {

@@ -27,7 +27,7 @@ var (
 const (
 	searchLimit  = 10
 	chunkSize    = 1000
-	chunkOverlap = 100
+	chunkOverlap = 50
 )
 
 var separators = []string{"\n\n", "\n", ". ", " ", ""}
@@ -45,7 +45,8 @@ func (s *service) UploadDocument(ctx context.Context, userID int64, filename str
 
 		s.log.Info().Int64("doc_id", createdDoc.ID).Msg("Документ создан, начинаем чанкование")
 
-		chunks := SplitTextIterative(string(fileContent), chunkSize, chunkOverlap)
+		semanticSplitter := NewTextSplitter(chunkSize, chunkOverlap)
+		chunks := semanticSplitter.SplitText(string(fileContent))
 		s.log.Info().Int("chunks_count", len(chunks)).Msg("Текст разбит на чанки")
 
 		for i, chunkText := range chunks {
@@ -58,6 +59,10 @@ func (s *service) UploadDocument(ctx context.Context, userID int64, filename str
 		s.log.Debug().Msg("Чанки загружены")
 
 		doc = createdDoc
+		chunksLen := int64(len(chunks))
+		doc.TotalEmbeddings = chunksLen
+		doc.NullEmbeddings = chunksLen
+
 		return nil
 	})
 
@@ -83,6 +88,7 @@ func (s *service) Search(ctx context.Context, userID int64, query string) ([]dom
 	embedding := searchEmbedding.Data[0].Embedding
 	return s.repo.SearchUserChunks(ctx, userID, embedding, searchLimit)
 }
+
 func (s *service) SearchInDocument(ctx context.Context, userID, documentID int64, query string) ([]domain.SearchResult, error) {
 	_, err := s.repo.GetUserDocumentByID(ctx, documentID, userID)
 	if err != nil {
@@ -124,105 +130,123 @@ func (s *service) GetDocumentByID(ctx context.Context, userID, documentID int64)
 	return doc, nil
 }
 
-// === ИТЕРАТИВНЫЙ АЛГОРИТМ ДЕЛЕНИЯ ТЕКСТА ===
-
-type splitTask struct {
-	text     string
-	sepIndex int // какой сепаратор использовать
+type TextSplitter struct {
+	ChunkSize    int
+	ChunkOverlap int
+	Separators   []string
 }
 
-func SplitTextIterative(text string, chunkSize, chunkOverlap int) []string {
-	if utf8.RuneCountInString(text) <= chunkSize {
+func NewTextSplitter(chunkSize, chunkOverlap int) *TextSplitter {
+	if chunkOverlap >= chunkSize {
+		panic("ChunkOverlap must be smaller than ChunkSize")
+	}
+	return &TextSplitter{
+		ChunkSize:    chunkSize,
+		ChunkOverlap: chunkOverlap,
+		Separators:   []string{"\n\n", "\n", ". ", " ", ""},
+	}
+}
+
+// splitTextWithSeparators рекурсивно делит текст, СОХРАНЯЯ разделители
+func (s *TextSplitter) splitTextWithSeparators(text string, separators []string) []string {
+	var finalChunks []string
+
+	if text == "" {
+		return finalChunks
+	}
+
+	// Если текст уже достаточно маленький, возвращаем его как есть
+	if utf8.RuneCountInString(text) <= s.ChunkSize {
 		return []string{text}
 	}
 
-	var result []string
-	queue := []splitTask{{text: text, sepIndex: 0}}
-
-	for len(queue) > 0 {
-		task := queue[0]
-		queue = queue[1:]
-
-		// Если уже на последнем сепараторе — делим по размеру
-		if task.sepIndex >= len(separators)-1 {
-			chunks := splitBySizeWithOverlap(task.text, chunkSize, chunkOverlap)
-			result = append(result, chunks...)
-			continue
-		}
-
-		sep := separators[task.sepIndex]
-		parts := strings.Split(task.text, sep)
-
-		var current strings.Builder
-		var tempChunks []string
-
-		for i, part := range parts {
-			addLen := len(part)
-			if i > 0 {
-				addLen += len(sep)
+	// Если сепараторы кончились, режем по размеру рун
+	if len(separators) == 0 {
+		runes := []rune(text)
+		for i := 0; i < len(runes); i += s.ChunkSize {
+			end := i + s.ChunkSize
+			if end > len(runes) {
+				end = len(runes)
 			}
-
-			// Если не влезает — сохраняем текущий чанк
-			if current.Len()+addLen > chunkSize && current.Len() > 0 {
-				chunk := current.String()
-				tempChunks = append(tempChunks, chunk)
-				current.Reset()
-
-				// Добавляем перекрытие
-				if chunkOverlap > 0 {
-					overlap := getLastNRunes(chunk, chunkOverlap)
-					current.WriteString(overlap)
-				}
-			}
-
-			if i > 0 && current.Len() > 0 {
-				current.WriteString(sep)
-			}
-			current.WriteString(part)
+			finalChunks = append(finalChunks, string(runes[i:end]))
 		}
+		return finalChunks
+	}
 
-		if current.Len() > 0 {
-			tempChunks = append(tempChunks, current.String())
-		}
+	separator := separators[0]
+	remainingSeparators := separators[1:]
 
-		// Обрабатываем каждый полученный чанк
-		for _, chunk := range tempChunks {
-			if utf8.RuneCountInString(chunk) > chunkSize {
-				// Отправляем в очередь с следующим сепаратором
-				queue = append(queue, splitTask{text: chunk, sepIndex: task.sepIndex + 1})
+	// Делим по сепаратору
+	splits := strings.Split(text, separator)
+	var goodSplits []string
+	for i, split := range splits {
+		if split != "" {
+			// Добавляем разделитель обратно ко всем частям, кроме последней
+			if i < len(splits)-1 {
+				goodSplits = append(goodSplits, split+separator)
 			} else {
-				result = append(result, chunk)
+				goodSplits = append(goodSplits, split)
 			}
 		}
 	}
 
-	return result
+	// Теперь для каждого слишком большого куска вызываем рекурсию
+	for _, split := range goodSplits {
+		if utf8.RuneCountInString(split) > s.ChunkSize {
+			finalChunks = append(finalChunks, s.splitTextWithSeparators(split, remainingSeparators)...)
+		} else {
+			finalChunks = append(finalChunks, split)
+		}
+	}
+	return finalChunks
 }
 
-// splitBySizeWithOverlap — финальное деление по размеру
-func splitBySizeWithOverlap(text string, chunkSize, chunkOverlap int) []string {
-	runes := []rune(text)
+// mergeSplits склеивает мелкие куски в большие чанки
+func (s *TextSplitter) mergeSplits(splits []string) []string {
 	var chunks []string
-	i := 0
-	for i < len(runes) {
-		end := i + chunkSize
-		if end > len(runes) {
-			end = len(runes)
+	var currentChunk []string
+	currentLength := 0
+
+	for _, split := range splits {
+		splitLength := utf8.RuneCountInString(split)
+
+		// Если добавление нового куска превысит лимит, сохраняем текущий чанк
+		if currentLength+splitLength > s.ChunkSize && len(currentChunk) > 0 {
+			chunkText := strings.Join(currentChunk, "")
+			chunks = append(chunks, chunkText)
+
+			// Начинаем новый чанк, добавляя перекрытие из конца предыдущего
+			var overlap []string
+			overlapLength := 0
+			for i := len(currentChunk) - 1; i >= 0; i-- {
+				part := currentChunk[i]
+				partLength := utf8.RuneCountInString(part)
+				// Собираем перекрытие, пока оно не станет достаточным
+				if overlapLength+partLength > s.ChunkOverlap && len(overlap) > 0 {
+					break
+				}
+				overlapLength += partLength
+				overlap = append([]string{part}, overlap...)
+			}
+			currentChunk = overlap
+			currentLength = overlapLength
 		}
-		chunks = append(chunks, string(runes[i:end]))
-		i = end - chunkOverlap
-		if i <= 0 {
-			i = end
-		}
+
+		// Добавляем кусок в текущий чанк
+		currentChunk = append(currentChunk, split)
+		currentLength += splitLength
 	}
+
+	// Добавляем последний оставшийся чанк
+	if len(currentChunk) > 0 {
+		chunkText := strings.Join(currentChunk, "")
+		chunks = append(chunks, chunkText)
+	}
+
 	return chunks
 }
 
-// getLastNRunes — безопасно берёт последние N рун
-func getLastNRunes(s string, n int) string {
-	runes := []rune(s)
-	if len(runes) <= n {
-		return s
-	}
-	return string(runes[len(runes)-n:])
+func (s *TextSplitter) SplitText(text string) []string {
+	splits := s.splitTextWithSeparators(text, s.Separators)
+	return s.mergeSplits(splits)
 }
