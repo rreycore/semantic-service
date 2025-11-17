@@ -11,20 +11,12 @@ import (
 	"time"
 )
 
-// --- Модели запросов и ответов (соответствуют Pydantic-моделям) ---
-
-// EmbeddingRequest представляет тело запроса к эндпоинту /embeddings.
 type EmbeddingRequest struct {
-	// Input может быть как строкой (string), так и срезом строк ([]string).
-	// Использование `any` позволяет обрабатывать оба случая.
-	Input any `json:"input"`
-	// Model - необязательное поле, omitempty не будет включать его в JSON, если оно пустое.
-	Model string `json:"model,omitempty"`
-	// Dimensions - необязательное поле, используем указатель, чтобы можно было передать 0.
-	Dimensions *int `json:"dimensions,omitempty"`
+	Input      any    `json:"input"`
+	Model      string `json:"model,omitempty"`
+	Dimensions *int   `json:"dimensions,omitempty"`
 }
 
-// EmbeddingResponse представляет успешный ответ от эндпоинта /embeddings.
 type EmbeddingResponse struct {
 	Object string          `json:"object"`
 	Data   []EmbeddingData `json:"data"`
@@ -43,31 +35,24 @@ type UsageData struct {
 	TotalTokens  int `json:"total_tokens"`
 }
 
-// ErrorResponse представляет тело ответа при ошибке от сервера.
 type ErrorResponse struct {
 	Detail string `json:"detail"`
 }
 
-// --- Клиент для взаимодействия с сервисом ---
-
-// Client - это клиент для API сервиса эмбеддингов.
 type Client struct {
 	baseURL    string
 	httpClient *http.Client
 }
 
-// NewClient создает новый экземпляр клиента.
-// baseURL - базовый URL сервиса, например "http://localhost:8000".
 func NewClient(baseURL string) *Client {
 	return &Client{
-		baseURL: strings.TrimSuffix(baseURL, "/"), // Убираем слэш в конце, если он есть
+		baseURL: strings.TrimSuffix(baseURL, "/"),
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
 	}
 }
 
-// Ping проверяет доступность сервиса.
 func (c *Client) Ping(ctx context.Context) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/ping", nil)
 	if err != nil {
@@ -108,7 +93,6 @@ func (c *Client) createEmbeddings(ctx context.Context, req EmbeddingRequest) (*E
 	}
 	switch req.Input.(type) {
 	case string, []string:
-		// all good
 	default:
 		return nil, fmt.Errorf("input must be a string or a slice of strings")
 	}

@@ -112,14 +112,12 @@ func (h *handler) requestErrorHandler(w http.ResponseWriter, r *http.Request, er
 }
 
 func (h *handler) responseErrorHandler(w http.ResponseWriter, r *http.Request, err error) {
-	// Handle user not found as 401 Unauthorized (invalid/expired token)
 	if errors.Is(err, service.ErrUserNotFound) {
 		h.log.Warn().Str("uri", r.RequestURI).Msg("User not found - token references non-existent user")
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	// All other errors are 500
 	h.log.Err(err).Str("uri", r.RequestURI).Msg("Internal server error")
 	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 }

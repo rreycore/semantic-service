@@ -103,5 +103,3 @@ func main() {
 
 	log.Info().Msg("Shutdown complete")
 }
-
-// Test rebuild

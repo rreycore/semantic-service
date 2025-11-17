@@ -12,7 +12,6 @@ import (
 )
 
 func (h *handler) UploadDocument(ctx context.Context, request UploadDocumentRequestObject) (UploadDocumentResponseObject, error) {
-	// 1. Извлекаем userID из JWT
 	_, claims, _ := jwtauth.FromContext(ctx)
 	userIDFloat, ok := claims["user_id"].(float64)
 	if !ok {
@@ -21,7 +20,6 @@ func (h *handler) UploadDocument(ctx context.Context, request UploadDocumentRequ
 	}
 	userID := int64(userIDFloat)
 
-	// 2. Получаем multipart reader
 	multipartReader := request.Body
 	if multipartReader == nil {
 		h.log.Warn().Int64("user_id", userID).Msg("multipart body is nil")
@@ -32,7 +30,6 @@ func (h *handler) UploadDocument(ctx context.Context, request UploadDocumentRequ
 	var filename string
 	foundFile := false
 
-	// 3. Читаем части формы
 	for {
 		part, err := multipartReader.NextPart()
 		if err == io.EOF {
@@ -46,16 +43,22 @@ func (h *handler) UploadDocument(ctx context.Context, request UploadDocumentRequ
 		partName := part.FormName()
 		partFilename := part.FileName()
 
-		// Проверяем, что это файл и он .txt
 		if partName == "file" {
 			if partFilename == "" {
-				part.Close()
+				err = part.Close()
+				if err != nil {
+					return nil, err
+				}
 				h.log.Warn().Int64("user_id", userID).Msg("Пустое имя файла в части 'file'")
 				return UploadDocument400Response{}, fmt.Errorf("file name is missing")
 			}
 
 			if !strings.HasSuffix(strings.ToLower(partFilename), ".txt") {
-				part.Close()
+				err = part.Close()
+
+				if err != nil {
+					return nil, err
+				}
 				h.log.Warn().
 					Int64("user_id", userID).
 					Str("filename", partFilename).
@@ -63,10 +66,12 @@ func (h *handler) UploadDocument(ctx context.Context, request UploadDocumentRequ
 				return UploadDocument400Response{}, fmt.Errorf("only .txt files allowed")
 			}
 
-			// Читаем содержимое
 			fileContent, err = io.ReadAll(part)
 			if err != nil {
-				part.Close()
+				err = part.Close()
+				if err != nil {
+					return nil, err
+				}
 				h.log.Error().Err(err).Int64("user_id", userID).Msg("Ошибка чтения содержимого файла")
 				return nil, fmt.Errorf("failed to read file content")
 			}
@@ -79,20 +84,25 @@ func (h *handler) UploadDocument(ctx context.Context, request UploadDocumentRequ
 				Int("size_bytes", len(fileContent)).
 				Msg("Файл успешно прочитан")
 
-			part.Close()
-			break // Файл найден — выходим
+			err = part.Close()
+			if err != nil {
+				return nil, err
+			}
+
+			break
 		}
 
-		part.Close()
+		err = part.Close()
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	// 4. Проверяем, был ли файл
 	if !foundFile || fileContent == nil {
 		h.log.Warn().Int64("user_id", userID).Msg("Файл не был найден в запросе")
 		return UploadDocument400Response{}, fmt.Errorf("no file uploaded")
 	}
 
-	// 5. Дополнительная проверка размера (10MB)
 	const maxSize = 10 * 1024 * 1024 // 10 MB
 	if len(fileContent) > maxSize {
 		h.log.Warn().
@@ -103,7 +113,6 @@ func (h *handler) UploadDocument(ctx context.Context, request UploadDocumentRequ
 		return UploadDocument400Response{}, fmt.Errorf("file too large: max 10MB")
 	}
 
-	// 6. Передаём в сервис
 	h.log.Info().
 		Int64("user_id", userID).
 		Str("filename", filename).
@@ -120,7 +129,6 @@ func (h *handler) UploadDocument(ctx context.Context, request UploadDocumentRequ
 		return nil, err
 	}
 
-	// 7. Успешный ответ
 	h.log.Info().
 		Int64("user_id", userID).
 		Int64("document_id", doc.ID).
@@ -160,16 +168,13 @@ func (h *handler) ListUserDocuments(ctx context.Context, request ListUserDocumen
 	return responseDocs, nil
 }
 
-// DeleteDocument реализует StrictServerInterface.
 func (h *handler) DeleteDocument(ctx context.Context, request DeleteDocumentRequestObject) (DeleteDocumentResponseObject, error) {
 	_, claims, _ := jwtauth.FromContext(ctx)
 	userID := int64(claims["user_id"].(float64))
 
-	// documentID уже распарсен и доступен в request
 	docID := request.DocumentID
 
 	if err := h.service.DeleteUserDocument(ctx, userID, docID); err != nil {
-		// Можно добавить обработку service.ErrDocumentNotFound, если нужно
 		return nil, err
 	}
 
@@ -202,7 +207,6 @@ func (h *handler) Search(ctx context.Context, request SearchRequestObject) (Sear
 
 }
 
-// SearchInDocument реализует StrictServerInterface.
 func (h *handler) SearchInDocument(ctx context.Context, request SearchInDocumentRequestObject) (SearchInDocumentResponseObject, error) {
 	_, claims, _ := jwtauth.FromContext(ctx)
 	userID := int64(claims["user_id"].(float64))

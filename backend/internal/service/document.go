@@ -30,8 +30,6 @@ const (
 	chunkOverlap = 50
 )
 
-var separators = []string{"\n\n", "\n", ". ", " ", ""}
-
 func (s *service) UploadDocument(ctx context.Context, userID int64, filename string, fileContent []byte) (*domain.Document, error) {
 	s.log.Info().Int64("user_id", userID).Str("filename", filename).Int("size_bytes", len(fileContent)).Msg("Начало загрузки документа")
 
@@ -147,7 +145,6 @@ func NewTextSplitter(chunkSize, chunkOverlap int) *TextSplitter {
 	}
 }
 
-// splitTextWithSeparators рекурсивно делит текст, СОХРАНЯЯ разделители
 func (s *TextSplitter) splitTextWithSeparators(text string, separators []string) []string {
 	var finalChunks []string
 
@@ -155,12 +152,10 @@ func (s *TextSplitter) splitTextWithSeparators(text string, separators []string)
 		return finalChunks
 	}
 
-	// Если текст уже достаточно маленький, возвращаем его как есть
 	if utf8.RuneCountInString(text) <= s.ChunkSize {
 		return []string{text}
 	}
 
-	// Если сепараторы кончились, режем по размеру рун
 	if len(separators) == 0 {
 		runes := []rune(text)
 		for i := 0; i < len(runes); i += s.ChunkSize {
@@ -176,12 +171,10 @@ func (s *TextSplitter) splitTextWithSeparators(text string, separators []string)
 	separator := separators[0]
 	remainingSeparators := separators[1:]
 
-	// Делим по сепаратору
 	splits := strings.Split(text, separator)
 	var goodSplits []string
 	for i, split := range splits {
 		if split != "" {
-			// Добавляем разделитель обратно ко всем частям, кроме последней
 			if i < len(splits)-1 {
 				goodSplits = append(goodSplits, split+separator)
 			} else {
@@ -190,7 +183,6 @@ func (s *TextSplitter) splitTextWithSeparators(text string, separators []string)
 		}
 	}
 
-	// Теперь для каждого слишком большого куска вызываем рекурсию
 	for _, split := range goodSplits {
 		if utf8.RuneCountInString(split) > s.ChunkSize {
 			finalChunks = append(finalChunks, s.splitTextWithSeparators(split, remainingSeparators)...)
@@ -201,7 +193,6 @@ func (s *TextSplitter) splitTextWithSeparators(text string, separators []string)
 	return finalChunks
 }
 
-// mergeSplits склеивает мелкие куски в большие чанки
 func (s *TextSplitter) mergeSplits(splits []string) []string {
 	var chunks []string
 	var currentChunk []string
@@ -210,18 +201,15 @@ func (s *TextSplitter) mergeSplits(splits []string) []string {
 	for _, split := range splits {
 		splitLength := utf8.RuneCountInString(split)
 
-		// Если добавление нового куска превысит лимит, сохраняем текущий чанк
 		if currentLength+splitLength > s.ChunkSize && len(currentChunk) > 0 {
 			chunkText := strings.Join(currentChunk, "")
 			chunks = append(chunks, chunkText)
 
-			// Начинаем новый чанк, добавляя перекрытие из конца предыдущего
 			var overlap []string
 			overlapLength := 0
 			for i := len(currentChunk) - 1; i >= 0; i-- {
 				part := currentChunk[i]
 				partLength := utf8.RuneCountInString(part)
-				// Собираем перекрытие, пока оно не станет достаточным
 				if overlapLength+partLength > s.ChunkOverlap && len(overlap) > 0 {
 					break
 				}
@@ -232,12 +220,10 @@ func (s *TextSplitter) mergeSplits(splits []string) []string {
 			currentLength = overlapLength
 		}
 
-		// Добавляем кусок в текущий чанк
 		currentChunk = append(currentChunk, split)
 		currentLength += splitLength
 	}
 
-	// Добавляем последний оставшийся чанк
 	if len(currentChunk) > 0 {
 		chunkText := strings.Join(currentChunk, "")
 		chunks = append(chunks, chunkText)

@@ -16,6 +16,9 @@ backend:
 tidy:
     go mod tidy
 
+lint-backend:
+    cd backend && golangci-lint run
+
 frontend-dev:
     cd frontend && bun run dev
 
